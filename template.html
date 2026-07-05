@@ -126,7 +126,6 @@ tbody tr:hover{background:rgba(197,102,125,0.06);}
   <button class="tab" onclick="showTab('sociedades')">Sociedades</button>
   <button class="tab" onclick="showTab('altas')">Altas</button>
   <button class="tab" onclick="showTab('provisiones')">Provisiones</button>
-  <button class="tab" onclick="showTab('cierres')">Cierres</button>
 </div>
 
 <!-- ═══════════ PANEL: EVENTOS ═══════════ -->
@@ -199,27 +198,64 @@ tbody tr:hover{background:rgba(197,102,125,0.06);}
 
 <!-- ═══════════ PANEL: PROVISIONES ═══════════ -->
 <div class="panel" id="panel-provisiones">
-  <div class="coming-soon">
-    <div class="icon">💰</div>
-    <h3>Provisiones</h3>
-    <p>Esta sección estará disponible cuando llenes la pestaña <strong>"Provisiones"</strong> en tu Excel y me mandes el archivo actualizado.</p>
+
+  <div class="kpis" id="kpis-prov"></div>
+
+  <div class="charts-row" style="grid-template-columns:1fr 1fr;">
+    <div class="chart-card"><div class="chart-lbl">Provisiones nacionales por AT (MXN)</div><canvas id="ch-prov-at" height="185"></canvas></div>
+    <div class="chart-card"><div class="chart-lbl">Provisiones internacionales por divisa</div><canvas id="ch-prov-divisa" height="185"></canvas></div>
+  </div>
+
+  <hr class="sec-div">
+  <div class="sec-title">Provisiones nacionales (MXN)</div>
+  <p class="sec-sub">Fuente: hoja "Provisiones", bloque nacional</p>
+
+  <div class="filters">
+    <label>Buscar</label><input type="text" id="pn-search" placeholder="Evento, contrato, AT...">
+    <label>Estatus</label><select id="pn-estatus"></select>
+    <label>AT</label><select id="pn-at"></select>
+    <label>Franquicia</label><select id="pn-franquicia"></select>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Estatus</th><th>Número de evento</th><th>Nombre del evento</th>
+        <th>AT</th><th>Franquicia</th><th>Fecha evento</th><th>No. contrato / RN</th><th>Monto MXN</th>
+      </tr></thead>
+      <tbody id="tbody-pn"></tbody>
+    </table>
+  </div>
+
+  <hr class="sec-div">
+  <div class="sec-title">Provisiones internacionales</div>
+  <p class="sec-sub">Fuente: hoja "Provisiones", bloque internacional. Se cruza con la hoja Internacionales (algunos campos pueden venir vacíos si no se ha cargado esa hoja).</p>
+
+  <div class="filters">
+    <label>Buscar</label><input type="text" id="pi-search" placeholder="Evento, contrato...">
+    <label>Divisa</label><select id="pi-divisa"></select>
+    <label>Estatus</label><select id="pi-estatus"></select>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Estatus</th><th>Número de evento</th><th>Nombre del evento</th>
+        <th>Franquicia</th><th>Fecha evento</th><th>No. contrato / RN</th><th>Divisa</th><th>Monto</th>
+      </tr></thead>
+      <tbody id="tbody-pi"></tbody>
+    </table>
   </div>
 </div>
 
-<!-- ═══════════ PANEL: CIERRES ═══════════ -->
-<div class="panel" id="panel-cierres">
-  <div class="coming-soon">
-    <div class="icon">✅</div>
-    <h3>Cierres de Eventos</h3>
-    <p>Esta sección estará disponible cuando llenes la pestaña <strong>"Cierres"</strong> en tu Excel. El checklist de documentos requeridos por tipo de evento ya está configurado automáticamente.</p>
-  </div>
-</div>
 
 </div><!-- .shell -->
 
 <script>
 // ═══════════ DATOS EMBEBIDOS DESDE TU EXCEL ═══════════
 const EVENTOS_RAW = [];
+const PROVISIONES_NAC_RAW = [];
+const PROVISIONES_INTER_RAW = [];
 
 // ═══════════ HELPERS ═══════════
 const fmt = n => n ? '$'+Number(n).toLocaleString('es-MX',{minimumFractionDigits:2}) : '—';
@@ -420,6 +456,149 @@ populateSel('ev-franquicia',EVENTOS.map(r=>r.franquicia));
 ['ev-search','ev-at','ev-tipo','ev-contract','ev-invoice','ev-franquicia']
   .forEach(id=>document.getElementById(id).addEventListener('input',applyFiltersEv));
 applyFiltersEv();
+
+// ═══════════ PROVISIONES ═══════════
+const PROV_NAC = PROVISIONES_NAC_RAW.map(r => ({
+  estatus:  clean(r['Estatus']),
+  evNum:    clean(r['Número del Evento']),
+  nombre:   clean(r['Nombre del Evento']),
+  at:       clean(r['AT']),
+  franq:    clean(r['Franquicia']),
+  fecha:    r['Fecha de evento'],
+  contrato: clean(r['No. de contrato / No. RN']),
+  monto:    Number(r['MONTO MXN'])||0,
+}));
+
+const PROV_INTER = PROVISIONES_INTER_RAW.map(r => ({
+  estatus:  clean(r['Estatus']),
+  evNum:    clean(r['Número del Evento']),
+  nombre:   clean(r['Nombre del Evento']),
+  franq:    clean(r['Franquicia']),
+  fecha:    r['Fecha de evento'],
+  contrato: clean(r['No. de contrato / No. RN']),
+  divisa:   clean(r['Divisa']),
+  monto:    Number(r['MONTO'])||0,
+}));
+
+const PROV_STATUS_PILL = {'PROVISIONAR':'p-amber','PAGADO':'p-teal','CANCELADO':'p-clay'};
+let chartProvAt, chartProvDivisa;
+
+function renderKpisProv(nac, inter){
+  const totalNac = nac.reduce((a,r)=>a+r.monto,0);
+  const pagadoNac = nac.filter(r=>r.estatus==='PAGADO').reduce((a,r)=>a+r.monto,0);
+  const provisionarNac = nac.filter(r=>r.estatus==='PROVISIONAR').reduce((a,r)=>a+r.monto,0);
+  const porDivisa = {};
+  inter.forEach(r=>{ if(r.divisa) porDivisa[r.divisa]=(porDivisa[r.divisa]||0)+r.monto; });
+  const divisaStr = Object.keys(porDivisa).length
+    ? Object.entries(porDivisa).map(([d,v])=>`${d} ${v.toLocaleString('es-MX',{minimumFractionDigits:2})}`).join(' · ')
+    : '—';
+
+  document.getElementById('kpis-prov').innerHTML = `
+    <div class="kpi"><div class="lbl">Provisiones nacionales (registros)</div><div class="val">${nac.length}</div></div>
+    <div class="kpi"><div class="lbl">Total provisionado MXN</div><div class="val">${fmt(totalNac)}</div></div>
+    <div class="kpi"><div class="lbl">Pendiente de provisionar</div><div class="val amber">${fmt(provisionarNac)}</div></div>
+    <div class="kpi"><div class="lbl">Ya pagado MXN</div><div class="val teal">${fmt(pagadoNac)}</div></div>
+    <div class="kpi"><div class="lbl">Registros internacionales</div><div class="val">${inter.length}</div></div>
+    <div class="kpi"><div class="lbl">Total internacional por divisa</div><div class="val rose" style="font-size:15px;">${divisaStr}</div></div>
+  `;
+}
+
+function renderChartsProv(nac, inter){
+  if(chartProvAt) chartProvAt.destroy();
+  if(chartProvDivisa) chartProvDivisa.destroy();
+
+  const atT = {};
+  nac.forEach(r=>{ if(r.at) atT[r.at]=(atT[r.at]||0)+r.monto; });
+  if(Object.keys(atT).length)
+    chartProvAt = new Chart(document.getElementById('ch-prov-at'), {
+      type:'bar',
+      data:{labels:Object.keys(atT),datasets:[{data:Object.values(atT),backgroundColor:'#9C4A60',borderRadius:5,maxBarThickness:40}]},
+      options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#E8D2CB'},ticks:{callback:v=>'$'+Number(v).toLocaleString('es-MX')}},x:{grid:{display:false}}}}
+    });
+
+  const divisaC = {};
+  inter.forEach(r=>{ if(r.divisa) divisaC[r.divisa]=(divisaC[r.divisa]||0)+r.monto; });
+  if(Object.keys(divisaC).length)
+    chartProvDivisa = new Chart(document.getElementById('ch-prov-divisa'), {
+      type:'doughnut',
+      data:{labels:Object.keys(divisaC),datasets:[{data:Object.values(divisaC),backgroundColor:['#3E8E79','#CE8A3E','#C5667D','#5B6B85'],borderWidth:2,borderColor:'#FBF3F1'}]},
+      options:{plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},cutout:'62%'}
+    });
+}
+
+function renderTablePN(rows){
+  const tbody = document.getElementById('tbody-pn');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No hay registros para los filtros seleccionados</td></tr>`; return; }
+  tbody.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${pill(r.estatus, PROV_STATUS_PILL)}</td>
+      <td class="mono">${r.evNum||'—'}</td>
+      <td>${r.nombre||'—'}</td>
+      <td>${r.at||'—'}</td>
+      <td>${r.franq||'—'}</td>
+      <td class="mono">${fmtDate(r.fecha)}</td>
+      <td class="mono dim">${r.contrato||'—'}</td>
+      <td class="amt">${fmt(r.monto)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderTablePI(rows){
+  const tbody = document.getElementById('tbody-pi');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="8" class="empty-state">No hay registros para los filtros seleccionados</td></tr>`; return; }
+  tbody.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${pill(r.estatus, PROV_STATUS_PILL)}</td>
+      <td class="mono">${r.evNum||'—'}</td>
+      <td>${r.nombre||'—'}</td>
+      <td>${r.franq||'—'}</td>
+      <td class="mono">${fmtDate(r.fecha)}</td>
+      <td class="mono dim">${r.contrato||'—'}</td>
+      <td>${r.divisa||'—'}</td>
+      <td class="amt">${r.divisa?r.divisa+' ':''}${Number(r.monto).toLocaleString('es-MX',{minimumFractionDigits:2})}</td>
+    </tr>
+  `).join('');
+}
+
+function applyFiltersProv(){
+  const searchN = document.getElementById('pn-search').value.toLowerCase();
+  const estN = document.getElementById('pn-estatus').value;
+  const atN = document.getElementById('pn-at').value;
+  const franqN = document.getElementById('pn-franquicia').value;
+
+  const filteredNac = PROV_NAC.filter(r=>{
+    if(searchN && !([r.evNum,r.nombre,r.at,r.contrato].join(' ').toLowerCase()).includes(searchN)) return false;
+    if(estN && r.estatus!==estN) return false;
+    if(atN && r.at!==atN) return false;
+    if(franqN && r.franq!==franqN) return false;
+    return true;
+  });
+
+  const searchI = document.getElementById('pi-search').value.toLowerCase();
+  const divI = document.getElementById('pi-divisa').value;
+  const estI = document.getElementById('pi-estatus').value;
+
+  const filteredInter = PROV_INTER.filter(r=>{
+    if(searchI && !([r.evNum,r.nombre,r.contrato].join(' ').toLowerCase()).includes(searchI)) return false;
+    if(divI && r.divisa!==divI) return false;
+    if(estI && r.estatus!==estI) return false;
+    return true;
+  });
+
+  renderKpisProv(filteredNac, filteredInter);
+  renderChartsProv(filteredNac, filteredInter);
+  renderTablePN(filteredNac);
+  renderTablePI(filteredInter);
+}
+
+populateSel('pn-estatus', PROV_NAC.map(r=>r.estatus));
+populateSel('pn-at', PROV_NAC.map(r=>r.at));
+populateSel('pn-franquicia', PROV_NAC.map(r=>r.franq));
+populateSel('pi-divisa', PROV_INTER.map(r=>r.divisa));
+populateSel('pi-estatus', PROV_INTER.map(r=>r.estatus));
+['pn-search','pn-estatus','pn-at','pn-franquicia','pi-search','pi-divisa','pi-estatus']
+  .forEach(id=>document.getElementById(id).addEventListener('input',applyFiltersProv));
+applyFiltersProv();
 </script>
 </body>
 </html>

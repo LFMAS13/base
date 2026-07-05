@@ -40,6 +40,18 @@ NUMERIC_COLUMNS = {
     "VALOR DE FACTURA",
 }
 
+# Normalización de valores con typos/variantes que deben unificarse (case-insensitive)
+AT_NORMALIZE = {
+    "inmunology": "Inmunología",
+    "inmunología": "Inmunología",
+}
+
+
+def normalize_at(v):
+    if not isinstance(v, str):
+        return None
+    return AT_NORMALIZE.get(v.strip().lower(), v)
+
 
 def clean(v):
     """Limpia celdas: convierte #REF!, cadenas vacías y espacios sobrantes en None."""
@@ -47,7 +59,7 @@ def clean(v):
         return None
     if isinstance(v, str):
         s = v.strip()
-        if s == "" or s.upper() == "#REF!":
+        if s == "" or s.upper() in ("#REF!", "#N/A", "#NAME?", "#VALUE!", "#DIV/0!"):
             return None
         return s
     if isinstance(v, (datetime.datetime, datetime.date)):
@@ -105,10 +117,83 @@ def load_rows(xlsx_path):
         rec = {}
         for col in COLUMNS:
             raw = get(row, col)
-            rec[col] = clean_number(raw) if col in NUMERIC_COLUMNS else clean(raw)
+            if col in NUMERIC_COLUMNS:
+                rec[col] = clean_number(raw)
+            elif col == "AT":
+                rec[col] = normalize_at(clean(raw))
+            else:
+                rec[col] = clean(raw)
         records.append(rec)
 
     return records
+
+
+def load_provisiones(xlsx_path):
+    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
+    if "Provisiones" not in wb.sheetnames:
+        return [], []
+    ws = wb["Provisiones"]
+    rows = list(ws.iter_rows(values_only=True))
+    if len(rows) < 2:
+        return [], []
+
+    cols_nac = ["Estatus", "Cuenta", "MONTO MXN", "Centro de Costos", "Orden Interna",
+                "Nombre del Evento", "Número del Evento", "Fecha de evento",
+                "Fecha Firma de contrato", "No. de contrato / No. RN", "Concatenado",
+                "AT", "Franquicia"]
+    cols_inter = ["Estatus", "Cuenta", "MONTO", "Centro de Costos", "Orden Interna",
+                  "Nombre del Evento", "Número del Evento", "Fecha de evento",
+                  "Fecha Firma de contrato", "No. de contrato / No. RN", "Concatenado",
+                  "AT", "Franquicia", "Divisa"]
+
+    nac, inter = [], []
+    for row in rows[1:]:
+        block1 = row[0:13]
+        block2 = row[15:29]
+
+        if any(clean(v) is not None for v in block1):
+            rec = {}
+            for i, col in enumerate(cols_nac):
+                raw = block1[i] if i < len(block1) else None
+                if col == "MONTO MXN":
+                    rec[col] = clean_number(raw)
+                elif col == "AT":
+                    rec[col] = normalize_at(clean(raw))
+                else:
+                    rec[col] = clean(raw)
+            nac.append(rec)
+
+        if any(clean(v) is not None for v in block2):
+            rec = {}
+            for i, col in enumerate(cols_inter):
+                raw = block2[i] if i < len(block2) else None
+                if col == "MONTO":
+                    rec[col] = clean_number(raw)
+                elif col == "AT":
+                    rec[col] = normalize_at(clean(raw))
+                else:
+                    rec[col] = clean(raw)
+            inter.append(rec)
+
+    return nac, inter
+
+
+def inject_data(template, marker, records):
+    start_marker = template.find(marker)
+    if start_marker == -1:
+        print(f'Aviso: no encontré "{marker}" en el template, se omite.')
+        return template
+
+    json_start = start_marker + len(marker)
+    decoder = json.JSONDecoder()
+    try:
+        _, json_end = decoder.raw_decode(template, json_start)
+    except json.JSONDecodeError:
+        print(f'Error: no pude leer el arreglo existente para "{marker}".')
+        sys.exit(1)
+
+    data_json = json.dumps(records, ensure_ascii=False)
+    return template[:json_start] + data_json + template[json_end:]
 
 
 def main():
@@ -120,33 +205,20 @@ def main():
     out_path = sys.argv[2] if len(sys.argv) > 2 else "dashboard.html"
 
     records = load_rows(xlsx_path)
+    prov_nac, prov_inter = load_provisiones(xlsx_path)
 
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         template = f.read()
 
-    marker = "const EVENTOS_RAW = "
-    start_marker = template.find(marker)
-    if start_marker == -1:
-        print(f'Error: no encontré "{marker}" en {TEMPLATE_PATH}')
-        sys.exit(1)
-
-    json_start = start_marker + len(marker)
-    # Usamos el decodificador de JSON para encontrar exactamente dónde termina
-    # el arreglo actual, sin importar su contenido (comillas, corchetes, etc).
-    decoder = json.JSONDecoder()
-    try:
-        _, json_end = decoder.raw_decode(template, json_start)
-    except json.JSONDecodeError:
-        print("Error: no pude leer el arreglo EVENTOS_RAW existente en el template.")
-        sys.exit(1)
-
-    data_json = json.dumps(records, ensure_ascii=False)
-    output = template[:json_start] + data_json + template[json_end:]
+    template = inject_data(template, "const EVENTOS_RAW = ", records)
+    template = inject_data(template, "const PROVISIONES_NAC_RAW = ", prov_nac)
+    template = inject_data(template, "const PROVISIONES_INTER_RAW = ", prov_inter)
 
     with open(out_path, "w", encoding="utf-8") as f:
-        f.write(output)
+        f.write(template)
 
-    print(f"OK: {len(records)} filas incrustadas -> {out_path}")
+    print(f"OK: {len(records)} eventos, {len(prov_nac)} provisiones nacionales, "
+          f"{len(prov_inter)} provisiones internacionales -> {out_path}")
 
 
 if __name__ == "__main__":
