@@ -52,6 +52,8 @@ def clean(v):
         return s
     if isinstance(v, (datetime.datetime, datetime.date)):
         return v.isoformat()[:10]
+    if isinstance(v, datetime.time):
+        return v.isoformat()
     return v
 
 
@@ -69,7 +71,7 @@ def clean_number(v):
 
 def pick_sheet(wb):
     # Ajusta este nombre si tu pestaña de eventos se llama distinto
-    for name in ("Eventos", "Sheet1"):
+    for name in ("Nacionales", "Eventos", "Sheet1"):
         if name in wb.sheetnames:
             return wb[name]
     return wb[wb.sheetnames[0]]
