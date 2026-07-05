@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Seguimiento de Eventos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --ink:#3D2430;--paper:#FBF3F1;--paper-dim:#F3E3DE;--line:#E8D2CB;
+  --rose:#C5667D;--rose-deep:#9C4A60;--rose-soft:#F3DCE2;
+  --amber:#CE8A3E;--amber-soft:#F6E7D2;
+  --teal:#3E8E79;--teal-soft:#DDEEE8;
+  --clay:#BD5B53;--clay-soft:#F4DCD8;
+  --slate:#8A6E76;--text:#3A2A2F;--text-dim:#8A7077;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--ink);font-family:'Inter',sans-serif;color:var(--text);}
+.shell{max-width:1500px;margin:0 auto;padding:24px 24px 80px;}
+
+/* HEADER */
+header{display:flex;justify-content:space-between;align-items:flex-end;padding:4px 2px 20px;border-bottom:1px solid rgba(255,255,255,0.12);margin-bottom:22px;flex-wrap:wrap;gap:12px;}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--rose);margin:0 0 5px;}
+h1{font-family:'Source Serif 4',serif;font-weight:600;font-size:26px;color:var(--paper);margin:0;}
+.header-note{font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(255,255,255,0.4);text-align:right;line-height:1.6;}
+
+/* TABS */
+.tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;}
+.tab{font-family:'Inter',sans-serif;font-weight:600;font-size:13px;padding:9px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:transparent;color:rgba(255,255,255,0.55);cursor:pointer;transition:.15s;}
+.tab:hover{color:var(--paper);border-color:rgba(255,255,255,0.4);}
+.tab.active{background:var(--paper);color:var(--ink);border-color:var(--paper);}
+
+/* PANELS */
+.panel{display:none;} .panel.active{display:block;}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;}
+.kpi{background:var(--paper);border-radius:10px;padding:14px 16px;border:1px solid var(--line);}
+.kpi .lbl{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);margin-bottom:7px;line-height:1.4;}
+.kpi .val{font-family:'Source Serif 4',serif;font-size:24px;font-weight:600;color:var(--ink);}
+.val.amber{color:var(--amber);} .val.clay{color:var(--clay);} .val.teal{color:var(--teal);} .val.rose{color:var(--rose-deep);}
+
+/* CHARTS */
+.charts-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;}
+.chart-card{background:var(--paper);border-radius:10px;border:1px solid var(--line);padding:14px 16px 10px;}
+.chart-lbl{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-dim);margin-bottom:8px;}
+
+/* KANBAN */
+.kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:10px;align-items:start;}
+.k-col{background:var(--paper-dim);border-radius:10px;border-top:4px solid var(--slate);padding:11px;}
+.k-proximo{border-top-color:#5B6B85;} .k-solicitada{border-top-color:var(--amber);}
+.k-ingresada{border-top-color:var(--rose);} .k-pagada{border-top-color:var(--teal);}
+.k-error{border-top-color:var(--clay);}
+.k-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+.k-title{font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);}
+.k-count{font-family:'Source Serif 4',serif;font-size:20px;font-weight:700;color:var(--ink);}
+.k-cards{display:flex;flex-direction:column;gap:7px;}
+.k-card{background:#fff;border-radius:7px;padding:8px 9px;border-left:3px solid var(--slate);}
+.k-proximo .k-card{border-left-color:#5B6B85;} .k-solicitada .k-card{border-left-color:var(--amber);}
+.k-ingresada .k-card{border-left-color:var(--rose);} .k-pagada .k-card{border-left-color:var(--teal);}
+.k-error .k-card{border-left-color:var(--clay);}
+.k-ev{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-dim);}
+.k-name{font-family:'Source Serif 4',serif;font-weight:600;font-size:12.5px;color:var(--ink);margin:2px 0 3px;line-height:1.2;}
+.k-meta{display:flex;justify-content:space-between;font-size:10.5px;color:var(--text-dim);}
+.k-amt{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);font-size:11px;}
+.k-empty{font-size:11px;color:var(--text-dim);font-style:italic;}
+.k-total{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text-dim);margin-top:5px;}
+.sec-div{border:none;border-top:1px solid rgba(255,255,255,0.12);margin:6px 0 20px;}
+.sec-title{font-family:'Source Serif 4',serif;font-size:18px;color:var(--paper);margin:0 0 3px;}
+.sec-sub{font-size:12px;color:rgba(255,255,255,0.45);margin:0 0 12px;}
+
+/* FILTERS */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px;background:var(--paper);padding:11px 13px;border-radius:10px;border:1px solid var(--line);align-items:center;}
+.filters select,.filters input{font-family:'Inter',sans-serif;font-size:12.5px;padding:6px 9px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--text);}
+.filters input[type="text"]{flex:1;min-width:150px;}
+.filters label{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;color:var(--text-dim);margin-right:-3px;}
+
+/* TABLE */
+.table-wrap{background:var(--paper);border-radius:10px;border:1px solid var(--line);overflow:auto;max-height:500px;}
+table{width:100%;border-collapse:collapse;font-size:12.5px;}
+thead th{position:sticky;top:0;z-index:2;background:var(--paper-dim);text-align:left;padding:9px 10px;font-family:'JetBrains Mono',monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);border-bottom:1px solid var(--line);white-space:nowrap;}
+tbody td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:rgba(197,102,125,0.06);}
+.mono{font-family:'JetBrains Mono',monospace;}
+.amt{font-family:'JetBrains Mono',monospace;font-weight:700;}
+.dim{color:var(--text-dim);font-size:11.5px;}
+.empty-state{text-align:center;padding:36px;color:var(--text-dim);font-size:13px;}
+
+/* PILLS */
+.pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;white-space:nowrap;}
+.p-teal{background:var(--teal-soft);color:var(--teal);} .p-amber{background:var(--amber-soft);color:var(--amber);}
+.p-clay{background:var(--clay-soft);color:var(--clay);} .p-slate{background:#E7EAF0;color:var(--slate);}
+.p-rose{background:var(--rose-soft);color:var(--rose-deep);} .p-ink{background:#E0D8DC;color:var(--ink);}
+
+/* COMING SOON PANELS */
+.coming-soon{background:var(--paper);border-radius:12px;border:1px solid var(--line);padding:40px;text-align:center;max-width:500px;margin:60px auto;}
+.coming-soon h3{font-family:'Source Serif 4',serif;font-size:20px;color:var(--ink);margin:0 0 10px;}
+.coming-soon p{font-size:13px;color:var(--text-dim);line-height:1.7;margin:0;}
+.coming-soon .icon{font-size:36px;margin-bottom:14px;}
+
+.hidden{display:none!important;}
+@media(max-width:1100px){.kpis,.charts-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:700px){.kanban{grid-template-columns:1fr 1fr;} .kpis{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<header>
+  <div>
+    <p class="eyebrow">Operaciones de Eventos · Speakers Médicos</p>
+    <h1>Panel de Seguimiento de Eventos</h1>
+  </div>
+  <div class="header-note">
+    Datos cargados desde tu Excel<br>
+    Para actualizar: manda el Excel y se regenera el HTML
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('eventos')">Eventos</button>
+  <button class="tab" onclick="showTab('internacionales')">Ponentes Internacionales</button>
+  <button class="tab" onclick="showTab('sociedades')">Sociedades</button>
+  <button class="tab" onclick="showTab('altas')">Altas</button>
+  <button class="tab" onclick="showTab('provisiones')">Provisiones</button>
+  <button class="tab" onclick="showTab('cierres')">Cierres</button>
+</div>
+
+<!-- ═══════════ PANEL: EVENTOS ═══════════ -->
+<div class="panel active" id="panel-eventos">
+
+  <div class="kpis" id="kpis-ev"></div>
+
+  <div class="charts-row">
+    <div class="chart-card"><div class="chart-lbl">Estatus de factura</div><canvas id="ch-invoice" height="185"></canvas></div>
+    <div class="chart-card"><div class="chart-lbl">Valor por AT</div><canvas id="ch-at" height="185"></canvas></div>
+    <div class="chart-card"><div class="chart-lbl">Eventos por tipo</div><canvas id="ch-tipo" height="185"></canvas></div>
+  </div>
+
+  <div class="sec-title">Seguimiento de Pagos</div>
+  <p class="sec-sub">¿En qué etapa va cada factura?</p>
+  <div class="kanban" id="kanban-ev"></div>
+
+  <hr class="sec-div">
+  <div class="sec-title">Tabla de eventos</div>
+
+  <div class="filters">
+    <label>Buscar</label><input type="text" id="ev-search" placeholder="Evento, attendee, AT...">
+    <label>AT</label><select id="ev-at"></select>
+    <label>Tipo</label><select id="ev-tipo"></select>
+    <label>Contrato</label><select id="ev-contract"></select>
+    <label>Factura</label><select id="ev-invoice"></select>
+    <label>Franquicia</label><select id="ev-franquicia"></select>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>No. Evento</th><th>Attendee ID</th><th>Est. Evento</th><th>AT</th>
+        <th>Tipo</th><th>Franquicia</th><th>Fecha evento</th>
+        <th>Est. Contrato</th><th>No. ICD</th>
+        <th>Est. Factura</th><th>Valor</th><th>Est. Pago</th>
+        <th>Acción actual</th>
+      </tr></thead>
+      <tbody id="tbody-ev"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════ PANEL: INTERNACIONALES ═══════════ -->
+<div class="panel" id="panel-internacionales">
+  <div class="coming-soon">
+    <div class="icon">✈️</div>
+    <h3>Ponentes Internacionales</h3>
+    <p>Esta sección estará disponible cuando llenes la pestaña <strong>"Ponentes Internacionales"</strong> en tu Excel y me mandes el archivo actualizado. La estructura de columnas ya está lista en el Excel que te entrego.</p>
+  </div>
+</div>
+
+<!-- ═══════════ PANEL: SOCIEDADES ═══════════ -->
+<div class="panel" id="panel-sociedades">
+  <div class="coming-soon">
+    <div class="icon">🤝</div>
+    <h3>Sociedades</h3>
+    <p>Esta sección estará disponible cuando llenes la pestaña <strong>"Sociedades"</strong> en tu Excel y me mandes el archivo actualizado.</p>
+  </div>
+</div>
+
+<!-- ═══════════ PANEL: ALTAS ═══════════ -->
+<div class="panel" id="panel-altas">
+  <div class="coming-soon">
+    <div class="icon">📋</div>
+    <h3>Altas de Ponentes</h3>
+    <p>Esta sección estará disponible cuando llenes la pestaña <strong>"Altas"</strong> en tu Excel y me mandes el archivo actualizado.</p>
+  </div>
+</div>
+
+<!-- ═══════════ PANEL: PROVISIONES ═══════════ -->
+<div class="panel" id="panel-provisiones">
+  <div class="coming-soon">
+    <div class="icon">💰</div>
+    <h3>Provisiones</h3>
+    <p>Esta sección estará disponible cuando llenes la pestaña <strong>"Provisiones"</strong> en tu Excel y me mandes el archivo actualizado.</p>
+  </div>
+</div>
+
+<!-- ═══════════ PANEL: CIERRES ═══════════ -->
+<div class="panel" id="panel-cierres">
+  <div class="coming-soon">
+    <div class="icon">✅</div>
+    <h3>Cierres de Eventos</h3>
+    <p>Esta sección estará disponible cuando llenes la pestaña <strong>"Cierres"</strong> en tu Excel. El checklist de documentos requeridos por tipo de evento ya está configurado automáticamente.</p>
+  </div>
+</div>
+
+</div><!-- .shell -->
+
+<script>
+// ═══════════ DATOS EMBEBIDOS DESDE TU EXCEL ═══════════
+const EVENTOS_RAW = [{"Revisión": "LF", "Acción Actual": "Seguimiento Luis fer ", "EVENTO+PONENTE": "EV004800570", "Número de evento": "EV00480057", "Estatus del Evento": "Aprobado", "AT": "Biespecifics", "Tipo de Evento": "Virtual", "Franquicia": "MKT", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": "APROBADO", "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": "2025-04-10", "Year": 2025, "Month": 4, "Estatus de Contrato": "FIRMADO", "Número ICD contrato": 2201448, "Request Navigator": "N/A", "Attendee ID": "A005103696", "Solicitud de excepción": -74, "Logística del speaker": "No", "Fecha solicitud del evento": "2025-06-23", "Fecha de firma de contrato": "2025-04-09", "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": "SOLICITADA", "VALOR DE FACTURA": 13125, "Estatus del pago de factura": "PROVISIONAR", "Fecha de solicitud de factura": "2026-04-13", "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": "0", "Número de evento": null, "Estatus del Evento": "Finalizado", "AT": "Specialty Care", "Tipo de Evento": "Presencial", "Franquicia": "MKT", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": "2026-02-12", "Year": 2026, "Month": 2, "Estatus de Contrato": "EN PROCESO DE FIRMA ", "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": "A005733646", "Solicitud de excepción": 46065, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": "2026-01-23", "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": "ERROR", "VALOR DE FACTURA": 9126, "Estatus del pago de factura": "PROVISIONAR", "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": "0", "Número de evento": null, "Estatus del Evento": "Finalizado", "AT": "Specialty Care", "Tipo de Evento": "Virtual", "Franquicia": "MKT", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": "2026-03-03", "Year": 2026, "Month": 3, "Estatus de Contrato": "PENDIENTE ", "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": "A005825756", "Solicitud de excepción": 46084, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": "2026-03-03", "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": "PAGADA", "VALOR DE FACTURA": 10562.5, "Estatus del pago de factura": "PAGADO", "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": "0", "Número de evento": null, "Estatus del Evento": "Finalizado", "AT": "Biespecifics", "Tipo de Evento": "Presencial", "Franquicia": "MKT", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": "2026-03-11", "Year": 2026, "Month": 3, "Estatus de Contrato": "CANCELADO ", "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": "A005797291", "Solicitud de excepción": 46092, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": "2026-03-05", "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": "INGRESADA", "VALOR DE FACTURA": 12075, "Estatus del pago de factura": "PAGADO", "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": "0", "Número de evento": null, "Estatus del Evento": "Finalizado", "AT": "Biespecifics", "Tipo de Evento": "Presencial", "Franquicia": "MKT", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": "2026-03-12", "Year": 2026, "Month": 3, "Estatus de Contrato": null, "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": "A005751499", "Solicitud de excepción": 46093, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": "2026-01-26", "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": "SOLICITADA", "VALOR DE FACTURA": 14455, "Estatus del pago de factura": "PAGADO", "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": "0", "Número de evento": null, "Estatus del Evento": "Aprobado", "AT": "Biespecifics", "Tipo de Evento": "Presencial", "Franquicia": "MKT", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": "2026-03-12", "Year": 2026, "Month": 3, "Estatus de Contrato": null, "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": "A005797500", "Solicitud de excepción": 46093, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": "2026-03-03", "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": "CANCELADO", "VALOR DE FACTURA": 8050, "Estatus del pago de factura": "PAGADO", "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": "0", "Número de evento": null, "Estatus del Evento": "Finalizado", "AT": "Specialty Care", "Tipo de Evento": "Hybrid", "Franquicia": "MKT", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": "2026-03-17", "Year": 2026, "Month": 3, "Estatus de Contrato": null, "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": "A005876657", "Solicitud de excepción": 46098, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": "2026-03-04", "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": "PENDIENTE", "VALOR DE FACTURA": 7393.75, "Estatus del pago de factura": "PAGADO", "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": "0", "Número de evento": null, "Estatus del Evento": "Finalizado", "AT": "Specialty Care", "Tipo de Evento": "Hybrid", "Franquicia": "MKT", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": "2026-03-17", "Year": 2026, "Month": 3, "Estatus de Contrato": null, "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": "A005883454", "Solicitud de excepción": 46098, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": "2026-03-10", "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": "ASISTENCIA", "VALOR DE FACTURA": 15843.75, "Estatus del pago de factura": "PROVISIONAR", "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": "0", "Número de evento": null, "Estatus del Evento": "Finalizado", "AT": "Specialty Care", "Tipo de Evento": "Hybrid", "Franquicia": "MKT", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": "2026-03-18", "Year": 2026, "Month": 3, "Estatus de Contrato": null, "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": "A005876676", "Solicitud de excepción": 46099, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": "2026-03-18", "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": "PRÓXIMO", "VALOR DE FACTURA": 7393.75, "Estatus del pago de factura": "PAGADO", "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": null, "Número de evento": null, "Estatus del Evento": "Planificado ", "AT": "Inmunology ", "Tipo de Evento": null, "Franquicia": "MAF ", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": null, "Year": null, "Month": null, "Estatus de Contrato": null, "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": null, "Solicitud de excepción": null, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": null, "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": null, "VALOR DE FACTURA": null, "Estatus del pago de factura": null, "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}, {"Revisión": null, "Acción Actual": null, "EVENTO+PONENTE": null, "Número de evento": null, "Estatus del Evento": null, "AT": "inmunología ", "Tipo de Evento": null, "Franquicia": "MAF ", "Nombre del evento": null, "Nombre Speaker": null, "Estatus del Speaker": null, "ID Vendor": null, "Régimen fiscal": null, "Fecha del evento": null, "Year": null, "Month": null, "Estatus de Contrato": null, "Número ICD contrato": null, "Request Navigator": null, "Attendee ID": null, "Solicitud de excepción": null, "Logística del speaker": null, "Fecha solicitud del evento": null, "Fecha de firma de contrato": null, "Nombre del Dueño del evento": null, "Dirección correo elec. ponente/consultor": null, "Fecha de solicitud de pago en sistema": null, "Producto/Marca": null, "CECO": null, "OI": null, "ACCOUNT": null, "Estatus de factura": null, "VALOR DE FACTURA": null, "Estatus del pago de factura": null, "Fecha de solicitud de factura": null, "UUID": null, "Posting date": null}];
+
+// ═══════════ HELPERS ═══════════
+const fmt = n => n ? '$'+Number(n).toLocaleString('es-MX',{minimumFractionDigits:2}) : '—';
+function fmtDate(d){
+  if(!d) return '—';
+  const dt = new Date(d+'T00:00:00');
+  if(isNaN(dt)) return d;
+  return dt.toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});
+}
+function clean(v){ return (v===null||v===undefined||v===''||v===0) ? '' : String(v).trim(); }
+
+const CONTRACT_PILL = {'FIRMADO':'p-teal','EN PROCESO DE FIRMA':'p-amber','PENDIENTE':'p-slate','CANCELADO':'p-clay'};
+const INVOICE_PILL  = {'PAGADA':'p-teal','INGRESADA':'p-rose','SOLICITADA':'p-amber','PENDIENTE':'p-slate','PRÓXIMO':'p-ink','ASISTENCIA':'p-amber','ERROR':'p-clay','CANCELADO':'p-clay'};
+const STATUS_PILL   = {'Aprobado':'p-teal','Finalizado':'p-slate','Cancelado':'p-clay','En proceso':'p-amber'};
+function pill(val,map){
+  const k = clean(val).toUpperCase();
+  const kOrig = clean(val);
+  return `<span class="pill ${map[kOrig]||map[k]||'p-slate'}">${val||'—'}</span>`;
+}
+
+// Normalizar datos del Excel a campos limpios
+const EVENTOS = EVENTOS_RAW.map(r => ({
+  evNum:          clean(r['Número de evento']),
+  attendeeId:     clean(r['Attendee ID']),
+  eventStatus:    clean(r['Estatus del Evento']),
+  at:             clean(r['AT']),
+  tipo:           clean(r['Tipo de Evento']),
+  franquicia:     clean(r['Franquicia']),
+  fecha:          r['Fecha del evento'],
+  contractStatus: clean(r['Estatus de Contrato']),
+  contractNum:    clean(r['Número ICD contrato']),
+  invoiceStatus:  clean(r['Estatus de factura']),
+  invoiceValue:   Number(r['VALOR DE FACTURA'])||0,
+  paymentStatus:  clean(r['Estatus del pago de factura']),
+  accion:         clean(r['Acción Actual']),
+  speaker:        clean(r['Nombre Speaker']),
+  owner:          clean(r['Nombre del Dueño del evento']),
+})).filter(r => r.attendeeId || r.evNum || r.invoiceStatus);
+
+// ═══════════ TABS ═══════════
+function showTab(id){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ═══════════ RENDER EVENTOS ═══════════
+let chartInvoice, chartAt, chartTipo;
+Chart.defaults.font.family = "'Inter',sans-serif";
+Chart.defaults.color = '#8A7077';
+
+const KANBAN_STAGES = [
+  {key:'PRÓXIMO',    label:'Próximo',    cls:'k-proximo'},
+  {key:'SOLICITADA', label:'Solicitada', cls:'k-solicitada'},
+  {key:'INGRESADA',  label:'Ingresada',  cls:'k-ingresada'},
+  {key:'PAGADA',     label:'Pagada',     cls:'k-pagada'},
+  {key:'ERROR',      label:'Error',      cls:'k-error'},
+];
+const KANBAN_KNOWN = new Set(['PRÓXIMO','SOLICITADA','INGRESADA','PAGADA','ERROR']);
+
+function renderKpisEv(rows){
+  const total=rows.length;
+  const pagadas=rows.filter(r=>r.invoiceStatus.toUpperCase()==='PAGADA').length;
+  const errores=rows.filter(r=>r.invoiceStatus.toUpperCase()==='ERROR').length;
+  const solicitadas=rows.filter(r=>r.invoiceStatus.toUpperCase()==='SOLICITADA').length;
+  const totalVal=rows.reduce((a,r)=>a+r.invoiceValue,0);
+  const valPag=rows.filter(r=>r.invoiceStatus.toUpperCase()==='PAGADA').reduce((a,r)=>a+r.invoiceValue,0);
+  document.getElementById('kpis-ev').innerHTML=`
+    <div class="kpi"><div class="lbl">Total eventos</div><div class="val">${total}</div></div>
+    <div class="kpi"><div class="lbl">Solicitadas</div><div class="val amber">${solicitadas}</div></div>
+    <div class="kpi"><div class="lbl">Pagadas</div><div class="val teal">${pagadas}</div></div>
+    <div class="kpi"><div class="lbl">Con error</div><div class="val clay">${errores}</div></div>
+    <div class="kpi"><div class="lbl">Valor total</div><div class="val">${fmt(totalVal)}</div></div>
+    <div class="kpi"><div class="lbl">Valor pagado</div><div class="val teal">${fmt(valPag)}</div></div>
+  `;
+}
+
+function renderKanbanEv(rows){
+  const others = rows.filter(r=>r.invoiceStatus && !KANBAN_KNOWN.has(r.invoiceStatus.toUpperCase()));
+  const stages = [...KANBAN_STAGES];
+  if(others.length) stages.push({key:'__otros__', label:'Otros', cls:'', otros:true});
+
+  document.getElementById('kanban-ev').style.gridTemplateColumns = `repeat(${stages.length},1fr)`;
+  document.getElementById('kanban-ev').innerHTML = stages.map(s=>{
+    const stageRows = s.otros
+      ? rows.filter(r=>r.invoiceStatus && !KANBAN_KNOWN.has(r.invoiceStatus.toUpperCase()))
+      : rows.filter(r=>r.invoiceStatus.toUpperCase()===s.key);
+    const total = stageRows.reduce((a,r)=>a+r.invoiceValue,0);
+    const cards = stageRows.length===0
+      ? '<div class="k-empty">Sin facturas</div>'
+      : stageRows.map(r=>`
+          <div class="k-card">
+            <div class="k-ev">${r.evNum||r.attendeeId||'—'}</div>
+            <div class="k-name">${r.speaker||r.at||'Sin speaker'}</div>
+            <div class="k-meta"><span>${r.franquicia||r.tipo||'—'}</span><span class="k-amt">${fmt(r.invoiceValue)}</span></div>
+          </div>`).join('');
+    return `<div class="k-col ${s.cls}">
+      <div class="k-head"><span class="k-title">${s.label}</span><span class="k-count">${stageRows.length}</span></div>
+      <div class="k-cards">${cards}</div>
+      ${total>0?`<div class="k-total">${fmt(total)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderChartsEv(rows){
+  if(chartInvoice) chartInvoice.destroy();
+  if(chartAt) chartAt.destroy();
+  if(chartTipo) chartTipo.destroy();
+
+  const invC={}, atT={}, tipoC={};
+  const invColors={'PAGADA':'#3E8E79','INGRESADA':'#C5667D','SOLICITADA':'#CE8A3E','PENDIENTE':'#8A6E76','PRÓXIMO':'#5B6B85','ASISTENCIA':'#CE8A3E','ERROR':'#BD5B53','CANCELADO':'#BD5B53'};
+  rows.forEach(r=>{
+    if(r.invoiceStatus) invC[r.invoiceStatus]=(invC[r.invoiceStatus]||0)+1;
+    if(r.at) atT[r.at]=(atT[r.at]||0)+r.invoiceValue;
+    if(r.tipo) tipoC[r.tipo]=(tipoC[r.tipo]||0)+1;
+  });
+
+  if(Object.keys(invC).length)
+    chartInvoice=new Chart(document.getElementById('ch-invoice'),{
+      type:'doughnut',
+      data:{labels:Object.keys(invC),datasets:[{data:Object.values(invC),backgroundColor:Object.keys(invC).map(k=>invColors[k.trim()]||'#C5667D'),borderWidth:2,borderColor:'#FBF3F1'}]},
+      options:{plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},cutout:'62%'}
+    });
+  if(Object.keys(atT).length)
+    chartAt=new Chart(document.getElementById('ch-at'),{
+      type:'bar',
+      data:{labels:Object.keys(atT),datasets:[{data:Object.values(atT),backgroundColor:'#C5667D',borderRadius:5,maxBarThickness:40}]},
+      options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#E8D2CB'},ticks:{callback:v=>'$'+Number(v).toLocaleString('es-MX')}},x:{grid:{display:false}}}}
+    });
+  if(Object.keys(tipoC).length)
+    chartTipo=new Chart(document.getElementById('ch-tipo'),{
+      type:'bar',
+      data:{labels:Object.keys(tipoC),datasets:[{data:Object.values(tipoC),backgroundColor:'#9C4A60',borderRadius:5,maxBarThickness:36}]},
+      options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'#E8D2CB'}},y:{grid:{display:false}}}}
+    });
+}
+
+function renderTableEv(rows){
+  if(!rows.length){
+    document.getElementById('tbody-ev').innerHTML=`<tr><td colspan="13" class="empty-state">No hay registros para los filtros seleccionados</td></tr>`;
+    return;
+  }
+  document.getElementById('tbody-ev').innerHTML=rows.map(r=>`
+    <tr>
+      <td class="mono">${r.evNum||'—'}</td>
+      <td class="mono dim">${r.attendeeId||'—'}</td>
+      <td>${pill(r.eventStatus, STATUS_PILL)}</td>
+      <td>${r.at||'—'}</td>
+      <td>${r.tipo||'—'}</td>
+      <td>${r.franquicia||'—'}</td>
+      <td class="mono">${fmtDate(r.fecha)}</td>
+      <td>${pill(r.contractStatus, CONTRACT_PILL)}</td>
+      <td class="mono dim">${r.contractNum||'—'}</td>
+      <td>${pill(r.invoiceStatus, INVOICE_PILL)}</td>
+      <td class="amt">${fmt(r.invoiceValue)}</td>
+      <td>${pill(r.paymentStatus, {'PAGADO':'p-teal','PROVISIONAR':'p-amber'})}</td>
+      <td class="dim" style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${r.accion||'—'}</td>
+    </tr>
+  `).join('');
+}
+
+function populateSel(id, values){
+  document.getElementById(id).innerHTML='<option value="">Todos</option>'+
+    [...new Set(values.filter(Boolean).map(v=>v.trim()))].sort()
+    .map(v=>`<option value="${v}">${v}</option>`).join('');
+}
+
+function applyFiltersEv(){
+  const search = document.getElementById('ev-search').value.toLowerCase();
+  const at     = document.getElementById('ev-at').value;
+  const tipo   = document.getElementById('ev-tipo').value;
+  const contr  = document.getElementById('ev-contract').value;
+  const inv    = document.getElementById('ev-invoice').value;
+  const franq  = document.getElementById('ev-franquicia').value;
+
+  const filtered = EVENTOS.filter(r=>{
+    if(search && !([r.evNum,r.attendeeId,r.at,r.tipo,r.accion,r.speaker].join(' ').toLowerCase()).includes(search)) return false;
+    if(at    && r.at?.trim()!==at) return false;
+    if(tipo  && r.tipo?.trim()!==tipo) return false;
+    if(contr && r.contractStatus?.trim()!==contr) return false;
+    if(inv   && r.invoiceStatus?.trim()!==inv) return false;
+    if(franq && r.franquicia?.trim()!==franq) return false;
+    return true;
+  });
+  renderKpisEv(filtered);
+  renderKanbanEv(filtered);
+  renderChartsEv(filtered);
+  renderTableEv(filtered);
+}
+
+// Init
+populateSel('ev-at',       EVENTOS.map(r=>r.at));
+populateSel('ev-tipo',     EVENTOS.map(r=>r.tipo));
+populateSel('ev-contract', EVENTOS.map(r=>r.contractStatus));
+populateSel('ev-invoice',  EVENTOS.map(r=>r.invoiceStatus));
+populateSel('ev-franquicia',EVENTOS.map(r=>r.franquicia));
+['ev-search','ev-at','ev-tipo','ev-contract','ev-invoice','ev-franquicia']
+  .forEach(id=>document.getElementById(id).addEventListener('input',applyFiltersEv));
+applyFiltersEv();
+</script>
+</body>
+</html>
